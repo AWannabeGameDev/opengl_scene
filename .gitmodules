@@ -1,0 +1,3 @@
+[submodule "gl_util"]
+	path = gl_util
+	url = https://github.com/AWannabeGameDev/gl_util.git
