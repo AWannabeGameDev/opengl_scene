@@ -1,10 +1,13 @@
 #version 460 core
 
-in vec3 fragColor;
+in vsOut
+{
+    vec3 color;
+} inp;
 
-out vec4 finalFragColor;
+out vec4 fragColor;
 
 void main()
 {
-    finalFragColor = vec4(fragColor, 0.0f);
+    fragColor = vec4(inp.color, 0.0f);
 }
