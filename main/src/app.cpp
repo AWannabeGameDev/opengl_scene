@@ -1,33 +1,74 @@
 #include "app.h"
+#define DB_PERLIN_IMPL
+#include <gl_util/db_perlin.h>
+#include <glm/gtc/type_ptr.hpp>
+
+struct Vertex
+{
+    glm::vec3 position;
+    glm::vec3 color;
+};
 
 void App::loadModels()
 {
-    float verts[] =
+    Vertex verts[terrainVertsCountX * terrainVertsCountZ];
+
+    for(int z = 0; z < terrainVertsCountZ; z++)
     {
-        -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
-        0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f
-    };
+        for(int x = 0; x < terrainVertsCountX; x++)
+        {
+            int index = x + (z * terrainVertsCountX);
+            float height = db::perlin(x / 2.0f, z / 3.0f);
+
+            verts[index].position = {x * terrainUnitLength, height * 2.0f, z * terrainUnitLength};
+            verts[index].color = {height, height, height};
+        }
+    }
 
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
-    unsigned int indices[] = 
+    unsigned int indices[6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1)];
+
+    for(int z = 0; z < (terrainVertsCountZ - 1); z++)
     {
-        0, 1, 2
-    };
+        for(int x = 0; x < (terrainVertsCountX - 1); x++)
+        {
+            int elemIndex = 6 * (x + (z * (terrainVertsCountX - 1)));
+            int vertIndex = x + (z * terrainVertsCountX);
+
+            indices[elemIndex] = vertIndex;
+            indices[elemIndex + 1] = vertIndex + 1;
+            indices[elemIndex + 2] = vertIndex + terrainVertsCountX;
+            indices[elemIndex + 3] = vertIndex + terrainVertsCountX;
+            indices[elemIndex + 4] = vertIndex + 1;
+            indices[elemIndex + 5] = vertIndex + terrainVertsCountX + 1;
+        }
+    }
 
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    terrainInfo.drawCmd.eboOffset = 0;
+    terrainInfo.drawCmd.vboOffset = 0;
+    terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
+    terrainInfo.drawCmd.instanceCount = 1;
+    terrainInfo.drawCmd.instanceOffset = 0;
+
+    glGenBuffers(1, &dibo);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(terrainInfo.drawCmd), &terrainInfo.drawCmd, GL_STATIC_DRAW);
 }
 
 void App::loadObjects()
 {
+    terrainTransform = glm::mat4{1.0f};
+
     glGenBuffers(1, &instanceVbo);
     glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), glm::value_ptr(terrainTransform), GL_DYNAMIC_DRAW);
 }
 
 void App::configureVAO()
@@ -37,15 +78,15 @@ void App::configureVAO()
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
 
-    glBindVertexBuffer(VERTEX_DATA_BINDING_POINT, vbo, 0, 6 * sizeof(float));
+    glBindVertexBuffer(VERTEX_DATA_BINDING_POINT, vbo, 0, sizeof(Vertex));
     glBindVertexBuffer(INSTANCE_DATA_BINDING_POINT, instanceVbo, 0, sizeof(glm::mat4));
     glVertexBindingDivisor(INSTANCE_DATA_BINDING_POINT, 1);
 
-    glVertexAttribFormat(VERTEX_POS_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexAttribFormat(VERTEX_POS_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
     glVertexAttribBinding(VERTEX_POS_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
     glEnableVertexAttribArray(VERTEX_POS_ATTRIB_INDEX);
 
-    glVertexAttribFormat(VERTEX_COLOR_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexAttribFormat(VERTEX_COLOR_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
     glVertexAttribBinding(VERTEX_COLOR_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
     glEnableVertexAttribArray(VERTEX_COLOR_ATTRIB_INDEX);
 
@@ -86,9 +127,11 @@ App::App() :
     glEnable(GL_DEBUG_OUTPUT);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    glEnable(GL_DEPTH_TEST);
     glViewport(0, 0, screenWidth, screenHeight);
 
     loadModels();
+    loadObjects();
     configureVAO();
     configureCamera();
     configureInputs();
@@ -148,11 +191,12 @@ void App::run()
         //----------------------------------------------------------------------------------------
 
         glBindVertexArray(vao);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
 
         glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (const void*)0);
+        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
 
         glfwSwapBuffers(window);
     }

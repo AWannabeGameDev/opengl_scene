@@ -1,3 +1,6 @@
+#ifndef APP_H
+#define APP_H
+
 #include <gl_util/util.h>
 #include <gl_util/camera.h>
 #include <gl_util/uniform_setter.h>
@@ -25,41 +28,50 @@ struct ModelInfo
 
 class App
 {
-    private :
-        static constexpr unsigned int VERTEX_POS_ATTRIB_INDEX = 0,
-        VERTEX_COLOR_ATTRIB_INDEX = 1,
-        VERTEX_TRANSFORM_ATTRIB_INDEX = 2;
+private :
+    static constexpr unsigned int VERTEX_POS_ATTRIB_INDEX = 0,
+    VERTEX_COLOR_ATTRIB_INDEX = 1,
+    VERTEX_TRANSFORM_ATTRIB_INDEX = 2;
 
-        static constexpr unsigned int VERTEX_DATA_BINDING_POINT = 0,
-        INSTANCE_DATA_BINDING_POINT = 1;
+    static constexpr unsigned int VERTEX_DATA_BINDING_POINT = 0,
+    INSTANCE_DATA_BINDING_POINT = 1;
 
-        int screenWidth = 1280;
-        int screenHeight = 720;
-        GLFWwindow* window;
+    int screenWidth = 1280;
+    int screenHeight = 720;
+    GLFWwindow* window;
 
-        KeyboardInput keys;
-        MouseInput mouse;
+    KeyboardInput keys;
+    MouseInput mouse;
 
-        UniformSetter uniforms;
+    UniformSetter uniforms;        
 
-        float camSens = 3.0f;
-        float camSpeed = 8.0f;
-        Camera camera;        
+    unsigned int vbo;
+    unsigned int instanceVbo;
+    unsigned int ebo;
+    unsigned int vao;
+    unsigned int dibo;
 
-        unsigned int vbo;
-        unsigned int instanceVbo;
-        unsigned int ebo;
-        unsigned int vao;
+    unsigned int objShader;
 
-        unsigned int objShader;
+    float camSens = 3.0f;
+    float camSpeed = 8.0f;
+    Camera camera;
 
-        void loadModels();
-        void loadObjects();
-        void configureVAO();
-        void configureCamera();
-        void configureInputs();
+    ModelInfo terrainInfo;
+    int terrainVertsCountX = 15;
+    int terrainVertsCountZ = 15;
+    float terrainUnitLength = 1.0f;
+    glm::mat4 terrainTransform;
 
-    public :
-        App();
-        void run();
+    void loadModels();
+    void loadObjects();
+    void configureVAO();
+    void configureCamera();
+    void configureInputs();
+
+public :
+    App();
+    void run();
 };
+
+#endif
