@@ -18,9 +18,9 @@ void App::loadModels()
         for(int x = 0; x < terrainVertsCountX; x++)
         {
             int index = x + (z * terrainVertsCountX);
-            float height = db::perlin(x / 2.0f, z / 3.0f);
+            float height = db::perlin(x * terrainUnitLength / 50.0f, z * terrainUnitLength / 50.0f);
 
-            verts[index].position = {x * terrainUnitLength, height * 2.0f, z * terrainUnitLength};
+            verts[index].position = {x * terrainUnitLength, height * 15.0f, z * terrainUnitLength};
             verts[index].color = {height, height, height};
         }
     }
@@ -120,7 +120,7 @@ void App::configureInputs()
 App::App() :
     window{initialize(screenWidth, screenHeight, "OpenGL Scene", 4, 6)},
     keys{window}, mouse{window},
-    camera{glm::radians(45.0f), (float)screenWidth / (float)screenHeight, 0.1f, 100.0f},
+    camera{glm::radians(45.0f), (float)screenWidth / (float)screenHeight, 0.1f, 500.0f},
     objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")}
 {
     glDebugMessageCallback(glDebugCallback, nullptr);

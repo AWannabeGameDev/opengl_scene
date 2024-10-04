@@ -54,12 +54,12 @@ private :
     unsigned int objShader;
 
     float camSens = 3.0f;
-    float camSpeed = 8.0f;
+    float camSpeed = 15.0f;
     Camera camera;
 
     ModelInfo terrainInfo;
-    int terrainVertsCountX = 15;
-    int terrainVertsCountZ = 15;
+    int terrainVertsCountX = 100;
+    int terrainVertsCountZ = 100;
     float terrainUnitLength = 1.0f;
     glm::mat4 terrainTransform;
 
