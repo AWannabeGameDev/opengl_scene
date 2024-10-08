@@ -26,7 +26,7 @@ uniform vec3 u_viewPosition;
 
 vec3 calcLighting(DirectionalLight dirLight)
 {
-    vec3 diffuseColor = inp.color * dirLight.diffuseColor *  dot(-dirLight.direction, inp.normal);
+    vec3 diffuseColor = inp.color * dirLight.diffuseColor * clamp(dot(-dirLight.direction, inp.normal), 0.0f, 1.0f);
 
     vec3 halfwayVector = normalize(-dirLight.direction + normalize(u_viewPosition - inp.fragPos));
     float specularStrength = pow(clamp(dot(inp.normal, halfwayVector), 0.0f, 1.0f), u_shininess);

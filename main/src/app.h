@@ -35,7 +35,8 @@ private :
     static constexpr unsigned int VERTEX_DATA_BINDING_POINT = 0,
     INSTANCE_DATA_BINDING_POINT = 1;
 
-    static constexpr unsigned int LIGHTS_UNI_BINDING = 0;
+    static constexpr unsigned int LIGHTS_UNI_BINDING = 0,
+    CAMERA_MATRICES_UNI_BINDING = 1;
 
     int screenWidth = 1280;
     int screenHeight = 720;
@@ -52,24 +53,26 @@ private :
     unsigned int vao;
     unsigned int dibo;
     unsigned int lightsUBO;
+    unsigned int cameraUBO;
 
     unsigned int objShader;
+    unsigned int normalShader;
 
     float camSens = 3.0f;
     float camSpeed = 50.0f;
     Camera camera;
 
     ModelInfo terrainInfo;
-    int terrainVertsCountX = 100;
-    int terrainVertsCountZ = 100;
-    float terrainUnitLength = 5.0f;
-    float terrainHeightScale = 70.0f;
+    int terrainVertsCountX = 50;
+    int terrainVertsCountZ = 50;
+    float terrainUnitLength = 10.0f;
+    float terrainHeightScale = 100.0f;
     float terrainGenNoiseScale = 0.006f;
     glm::mat4 terrainTransform;
-    glm::mat4 terrainNormalMatrix;
+    glm::mat3 terrainNormalMatrix;
 
     DirectionalLight dirLight;
-    float ambience = 0.2f;
+    float ambience = 0.0f;
 
     void loadModels();
     void loadTextures();

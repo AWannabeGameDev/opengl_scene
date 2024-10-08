@@ -6,8 +6,11 @@ layout(location = 2) in vec3 v_color;
 layout(location = 3) in mat4 v_model;
 layout(location = 7) in mat3 v_normalMatrix;
 
-uniform mat4 u_view;
-uniform mat4 u_proj;
+layout(std140) uniform cameraMatrices
+{
+    mat4 u_view;
+    mat4 u_proj;
+};
 
 out vsOut
 {

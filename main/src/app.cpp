@@ -16,6 +16,12 @@ struct InstanceData
     glm::mat3 normalMatrix;
 };
 
+struct CameraMatrices
+{
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 void App::loadModels()
 {
     Vertex verts[terrainVertsCountX * terrainVertsCountZ];
@@ -29,15 +35,10 @@ void App::loadModels()
                                        z * terrainUnitLength * terrainGenNoiseScale) * 0.5f) + 1.0f;
 
             verts[index].position = {x * terrainUnitLength, height * terrainHeightScale, z * terrainUnitLength};
-            verts[index].color = {height, height, height};
-
-            // TODO: Generate normals
+            verts[index].color = {0.0f, 1.0f, 0.0f}; //{height, height, height};
+            verts[index].normal = {0.0f, 0.0f, 0.0f};
         }
     }
-
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
     unsigned int indices[6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1)];
 
@@ -45,17 +46,43 @@ void App::loadModels()
     {
         for(int x = 0; x < (terrainVertsCountX - 1); x++)
         {
-            int elemIndex = 6 * (x + (z * (terrainVertsCountX - 1)));
-            int vertIndex = x + (z * terrainVertsCountX);
+            int tri1vert1 = x + (z * terrainVertsCountX);
+            int tri1vert2 = tri1vert1 + 1;
+            int tri1vert3 = tri1vert1 + terrainVertsCountX;
+            int tri2vert1 = tri1vert3;
+            int tri2vert2 = tri1vert2;
+            int tri2vert3 = tri1vert1 + terrainVertsCountX + 1;
 
-            indices[elemIndex] = vertIndex;
-            indices[elemIndex + 1] = vertIndex + 1;
-            indices[elemIndex + 2] = vertIndex + terrainVertsCountX;
-            indices[elemIndex + 3] = vertIndex + terrainVertsCountX;
-            indices[elemIndex + 4] = vertIndex + 1;
-            indices[elemIndex + 5] = vertIndex + terrainVertsCountX + 1;
+            glm::vec3 tri1normal = glm::normalize(glm::cross(verts[tri1vert2].position - verts[tri1vert1].position,
+                                                             verts[tri1vert2].position - verts[tri1vert3].position));
+            glm::vec3 tri2normal = glm::normalize(glm::cross(verts[tri2vert2].position - verts[tri2vert1].position,
+                                                             verts[tri2vert2].position - verts[tri2vert3].position));
+
+            verts[tri1vert1].normal += tri1normal;
+            verts[tri1vert2].normal += tri1normal;
+            verts[tri1vert3].normal += tri1normal;
+            verts[tri2vert1].normal += tri2normal;
+            verts[tri2vert2].normal += tri2normal;
+            verts[tri2vert3].normal += tri2normal;
+
+            int elemIndex = 6 * (x + (z * (terrainVertsCountX - 1)));
+            indices[elemIndex] = tri1vert1;
+            indices[elemIndex + 1] = tri1vert2;
+            indices[elemIndex + 2] = tri1vert3;
+            indices[elemIndex + 3] = tri2vert1;
+            indices[elemIndex + 4] = tri2vert2;
+            indices[elemIndex + 5] = tri2vert3;
         }
     }
+
+    for(int index = 0; index < (terrainVertsCountX * terrainVertsCountZ); index++)
+    {
+        verts[index].normal = glm::normalize(verts[index].normal);
+    }
+
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
@@ -84,22 +111,19 @@ void App::createObjects()
     terrainTransform = glm::mat4{1.0f};
     terrainNormalMatrix = glm::mat3{glm::inverse(glm::transpose(terrainTransform))};
 
-    printf("[%f, %f, %f]\n", terrainNormalMatrix[0].x, terrainNormalMatrix[0].y, terrainNormalMatrix[0].z);
-    printf("[%f, %f, %f]\n", terrainNormalMatrix[1].x, terrainNormalMatrix[1].y, terrainNormalMatrix[1].z);
-    printf("[%f, %f, %f]\n", terrainNormalMatrix[2].x, terrainNormalMatrix[2].y, terrainNormalMatrix[2].z);
-
     glGenBuffers(1, &instanceVbo);
     glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(terrainTransform));
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(glm::mat4), sizeof(glm::mat3), glm::value_ptr(terrainNormalMatrix));
+    glBufferSubData(GL_ARRAY_BUFFER, offsetof(InstanceData, modelMatrix), sizeof(glm::mat4), glm::value_ptr(terrainTransform));
+    glBufferSubData(GL_ARRAY_BUFFER, offsetof(InstanceData, normalMatrix), sizeof(glm::mat3), 
+                    glm::value_ptr(terrainNormalMatrix));
 }
 
 void App::createLightSources()
 {
     dirLight.direction = glm::normalize(glm::vec3{1.0f, -1.0f, 0.0f});
-    dirLight.diffuseColor = {1.0f, 1.0f, 1.0f};
-    dirLight.specularColor = {0.3f, 0.3f, 0.3f};
+    dirLight.diffuseColor = {0.8f, 0.8f, 0.8f};
+    dirLight.specularColor = {0.2f, 0.2f, 0.2f};
 
     glGenBuffers(1, &lightsUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, lightsUBO);
@@ -157,11 +181,15 @@ void App::configureVAO()
 
 void App::configureCamera()
 {
-    uniforms.addUniform(objShader, "u_view");
-    uniforms.addUniform(objShader, "u_proj");
+    glGenBuffers(1, &cameraUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraMatrices), nullptr, GL_DYNAMIC_DRAW);
+    glBufferSubData(GL_UNIFORM_BUFFER, offsetof(CameraMatrices, proj), sizeof(glm::mat4), 
+                    glm::value_ptr(camera.projectionMatrix()));
 
-    glUseProgram(objShader);
-    uniforms.setUniform(objShader, "u_proj", camera.projectionMatrix());
+    uniforms.bindUniformBlock(objShader, "cameraMatrices", CAMERA_MATRICES_UNI_BINDING);
+    uniforms.bindUniformBlock(normalShader, "cameraMatrices", CAMERA_MATRICES_UNI_BINDING);
+    glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_MATRICES_UNI_BINDING, cameraUBO);
 }
 
 void App::configureInputs()
@@ -178,7 +206,9 @@ App::App() :
     window{initialize(screenWidth, screenHeight, "OpenGL Scene", 4, 6)},
     keys{window}, mouse{window},
     camera{glm::radians(45.0f), (float)screenWidth / (float)screenHeight, 0.1f, 1000.0f},
-    objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")}
+    objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")},
+    normalShader{createShaderProgram("../src/shaders/normal_vs.glsl", "../src/shaders/normal_gs.glsl", 
+                                     "../src/shaders/normal_fs.glsl")}
 {
     glDebugMessageCallback(glDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
@@ -245,8 +275,20 @@ void App::run()
         camera.rotateGlobal({0.0f, 1.0f, 0.0f}, -mouse.getMouseMovementX() * camSens * dt);
 
         glUseProgram(objShader);
-        uniforms.setUniform(objShader, "u_view", camera.viewMatrix());
         uniforms.setUniform(objShader, "u_viewPosition", camera.position());
+
+        glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
+        glBufferSubData(GL_UNIFORM_BUFFER, offsetof(CameraMatrices, view), sizeof(glm::mat4), 
+                        glm::value_ptr(camera.viewMatrix()));
+
+        /*
+        dirLight.direction = glm::vec3{glm::rotate(glm::mat4{1.0f}, 0.5f * dt, {0.0f, 0.0f, 1.0f}) 
+                                       * glm::vec4{dirLight.direction, 1.0f}};
+
+        glBindBuffer(GL_UNIFORM_BUFFER, lightsUBO);
+        glBufferSubData(GL_UNIFORM_BUFFER, offsetof(DirectionalLight, direction), sizeof(glm::vec3), 
+                        glm::value_ptr(dirLight.direction));
+        */
 
         //----------------------------------------------------------------------------------------
 
@@ -256,8 +298,16 @@ void App::run()
         glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        glUseProgram(objShader);
+        //glEnable(GL_DEPTH_TEST);
         uniforms.setUniform(objShader, "u_shininess", terrainInfo.shininess);
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
+
+        /*
+        glUseProgram(normalShader);
+        //glDisable(GL_DEPTH_TEST);
+        glDrawArrays(GL_POINTS, terrainInfo.drawCmd.vboOffset, terrainVertsCountX * terrainVertsCountZ);
+        */
 
         glfwSwapBuffers(window);
     }
