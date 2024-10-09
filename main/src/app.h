@@ -36,7 +36,10 @@ private :
     INSTANCE_DATA_BINDING_POINT = 1;
 
     static constexpr unsigned int LIGHTS_UNI_BINDING = 0,
-    CAMERA_MATRICES_UNI_BINDING = 1;
+    CAMERA_MATRICES_UNI_BINDING = 1,
+    DIRLIGHT_MATRIX_UNI_BINDING = 2;
+
+    static constexpr int DIR_SHADOWMAP_TEXTURE_UNIT = 0;
 
     int screenWidth = 1280;
     int screenHeight = 720;
@@ -54,25 +57,37 @@ private :
     unsigned int dibo;
     unsigned int lightsUBO;
     unsigned int cameraUBO;
+    unsigned int dirLightMatrixUBO;
 
     unsigned int objShader;
     unsigned int normalShader;
+    unsigned int dirShadowShader;
 
     float camSens = 3.0f;
-    float camSpeed = 50.0f;
+    float camSpeed = 13.0f;
     Camera camera;
 
     ModelInfo terrainInfo;
-    int terrainVertsCountX = 50;
-    int terrainVertsCountZ = 50;
-    float terrainUnitLength = 10.0f;
-    float terrainHeightScale = 100.0f;
-    float terrainGenNoiseScale = 0.006f;
+    int terrainVertsCountX = 25;
+    int terrainVertsCountZ = 25;
+    int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
+    float terrainUnitLength = 2.0f;
+    float terrainHeightScale = 10.0f;
+    float terrainGenNoiseScale = 0.06f;
     glm::mat4 terrainTransform;
     glm::mat3 terrainNormalMatrix;
 
+    ModelInfo cubeInfo;
+    int cubeVertsCount = 24;
+
     DirectionalLight dirLight;
-    float ambience = 0.0f;
+    glm::mat4 dirLightMatrix;
+    unsigned int dirLightShadowMap;
+    int shadowMapWidth = 2048;
+    int shadowMapHeight = 2048;
+    float ambience = 0.1f;
+
+    unsigned int shadowFBO;
 
     void loadModels();
     void loadTextures();

@@ -12,18 +12,25 @@ layout(std140) uniform cameraMatrices
     mat4 u_proj;
 };
 
+layout(std140) uniform dirLightMatrix
+{
+    mat4 u_dirLightMatrix;
+};
+
 out vsOut
 {
     vec3 color;
     vec3 normal;
     vec3 fragPos;
+    vec3 fragPosForDirLight;
 } 
 outp;
 
 void main()
 {
-    gl_Position = u_proj * u_view * v_model * vec4(v_pos, 1.0f);
+    outp.fragPos = vec3(v_model * vec4(v_pos, 1.0f));
+    gl_Position = u_proj * u_view * vec4(outp.fragPos, 1.0f);
     outp.color = v_color;
     outp.normal = v_normalMatrix * v_normal;
-    outp.fragPos = vec3(v_model * vec4(v_pos, 1.0f));
+    outp.fragPosForDirLight = vec3(u_dirLightMatrix * vec4(outp.fragPos, 1.0f));
 }

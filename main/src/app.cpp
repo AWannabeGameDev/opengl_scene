@@ -2,6 +2,7 @@
 #define DB_PERLIN_IMPL
 #include <gl_util/db_perlin.h>
 #include <glm/gtc/type_ptr.hpp>
+#include <gl_util/texture.h>
 
 struct Vertex
 {
@@ -24,7 +25,25 @@ struct CameraMatrices
 
 void App::loadModels()
 {
-    Vertex verts[terrainVertsCountX * terrainVertsCountZ];
+    terrainInfo.drawCmd.eboOffset = 0;
+    terrainInfo.drawCmd.vboOffset = 0;
+    terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
+    terrainInfo.drawCmd.instanceCount = 1;
+    terrainInfo.drawCmd.instanceOffset = 0;
+
+    cubeInfo.drawCmd.eboOffset = terrainInfo.drawCmd.indexCount;
+    cubeInfo.drawCmd.vboOffset = terrainVertsCount;
+    cubeInfo.drawCmd.indexCount = 36;
+    cubeInfo.drawCmd.instanceCount = 1;
+    cubeInfo.drawCmd.instanceOffset = 1;
+
+    glGenBuffers(1, &dibo);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER, 2 * sizeof(DrawIndirect), nullptr, GL_STATIC_DRAW);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawIndirect), &terrainInfo.drawCmd);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), sizeof(DrawIndirect), &cubeInfo.drawCmd);
+
+    Vertex verts[terrainVertsCount + cubeVertsCount];
 
     for(int z = 0; z < terrainVertsCountZ; z++)
     {
@@ -40,7 +59,7 @@ void App::loadModels()
         }
     }
 
-    unsigned int indices[6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1)];
+    unsigned int indices[terrainInfo.drawCmd.indexCount + cubeInfo.drawCmd.indexCount];
 
     for(int z = 0; z < (terrainVertsCountZ - 1); z++)
     {
@@ -80,6 +99,30 @@ void App::loadModels()
         verts[index].normal = glm::normalize(verts[index].normal);
     }
 
+    for(int x = -1; x <= 1; x += 2)
+    {
+        for(int y = -1; y <= 1; y += 2)
+        {
+            for(int z = -1; z <= 1; z += 2)
+            {
+                int index = terrainVertsCount + 3 * ((2 * (x + 1)) + (y + 1) + ((z + 1) / 2));
+                verts[index].position = verts[index + 1].position = verts[index + 2].position 
+                = {x * 0.5f, y * 0.5f, z * 0.5f};
+
+                verts[index].normal = {(float)x, 0.0f, 0.0f};
+                verts[index + 1].normal = {0.0f, (float)y, 0.0f};
+                verts[index + 2].normal = {0.0f, 0.0f, (float)z};
+
+                verts[index].color = verts[index + 1].color = verts[index + 2].color = {1.0f, 0.0f, 0.0f};
+            }
+        }
+    }
+
+    for(int face = 0; face < 3; face++)
+    {
+        
+    }
+
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
@@ -87,16 +130,6 @@ void App::loadModels()
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    terrainInfo.drawCmd.eboOffset = 0;
-    terrainInfo.drawCmd.vboOffset = 0;
-    terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
-    terrainInfo.drawCmd.instanceCount = 1;
-    terrainInfo.drawCmd.instanceOffset = 0;
-
-    glGenBuffers(1, &dibo);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
-    glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), &terrainInfo.drawCmd, GL_STATIC_DRAW);
 }
 
 void App::loadTextures()
@@ -121,7 +154,7 @@ void App::createObjects()
 
 void App::createLightSources()
 {
-    dirLight.direction = glm::normalize(glm::vec3{1.0f, -1.0f, 0.0f});
+    dirLight.direction = glm::normalize(glm::vec3{1.0f, -1.0f, 1.0f});
     dirLight.diffuseColor = {0.8f, 0.8f, 0.8f};
     dirLight.specularColor = {0.2f, 0.2f, 0.2f};
 
@@ -132,11 +165,51 @@ void App::createLightSources()
     uniforms.bindUniformBlock(objShader, "lights", LIGHTS_UNI_BINDING);
     glBindBufferBase(GL_UNIFORM_BUFFER, LIGHTS_UNI_BINDING, lightsUBO);
 
+    glm::vec3 dirLightPosition = 
+    {
+        terrainVertsCountX * terrainUnitLength / 2.0f, 0.0f,
+        terrainVertsCountZ * terrainUnitLength / 2.0f  
+    };
+    dirLightMatrix = glm::ortho(-terrainVertsCountX * terrainUnitLength / 1.3f, terrainVertsCountX * terrainUnitLength / 1.3f,
+                                -terrainHeightScale * 1.5f, terrainHeightScale * 3.0f, 
+                                -terrainVertsCountZ * terrainUnitLength, terrainVertsCountZ * terrainUnitLength)
+                     * glm::lookAt(dirLightPosition, dirLightPosition + dirLight.direction, {0.0f, 1.0f, 0.0f});
+
+    glGenBuffers(1, &dirLightMatrixUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, dirLightMatrixUBO);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), glm::value_ptr(dirLightMatrix), GL_DYNAMIC_DRAW);
+
+    uniforms.bindUniformBlock(dirShadowShader, "dirLightMatrix", DIRLIGHT_MATRIX_UNI_BINDING);
+    uniforms.bindUniformBlock(objShader, "dirLightMatrix", DIRLIGHT_MATRIX_UNI_BINDING);
+    glBindBufferBase(GL_UNIFORM_BUFFER, DIRLIGHT_MATRIX_UNI_BINDING, dirLightMatrixUBO);
+
+    TextureParameterSet texParams =
+    {
+        .minFilter = GL_LINEAR,
+        .magFilter = GL_LINEAR,
+        .texWrapS = GL_CLAMP_TO_EDGE,
+        .texWrapT = GL_CLAMP_TO_EDGE,
+        .texWrapR = GL_CLAMP_TO_EDGE
+    };
+    dirLightShadowMap = createTexture(GL_TEXTURE_2D, texParams, GL_DEPTH_COMPONENT24, shadowMapWidth, shadowMapHeight);
+
+    glActiveTexture(GL_TEXTURE0 + DIR_SHADOWMAP_TEXTURE_UNIT);
+    glBindTexture(GL_TEXTURE_2D, dirLightShadowMap);
+
+    glGenFramebuffers(1, &shadowFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, dirLightShadowMap, 0);
+    glReadBuffer(GL_NONE);
+    glDrawBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     uniforms.addUniform(objShader, "u_viewPosition");
     uniforms.addUniform(objShader, "u_ambience");
+    uniforms.addUniform(objShader, "u_dirLightShadowMap");
 
     glUseProgram(objShader);
     uniforms.setUniform(objShader, "u_ambience", ambience);
+    uniforms.setUniform(objShader, "u_dirLightShadowMap", DIR_SHADOWMAP_TEXTURE_UNIT);
 }
 
 void App::configureVAO()
@@ -208,7 +281,8 @@ App::App() :
     camera{glm::radians(45.0f), (float)screenWidth / (float)screenHeight, 0.1f, 1000.0f},
     objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")},
     normalShader{createShaderProgram("../src/shaders/normal_vs.glsl", "../src/shaders/normal_gs.glsl", 
-                                     "../src/shaders/normal_fs.glsl")}
+                                     "../src/shaders/normal_fs.glsl")},
+    dirShadowShader{createShaderProgram("../src/shaders/dir_shadowmap_vs.glsl", "../src/shaders/dir_shadowmap_fs.glsl")}
 {
     glDebugMessageCallback(glDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
@@ -277,9 +351,10 @@ void App::run()
         glUseProgram(objShader);
         uniforms.setUniform(objShader, "u_viewPosition", camera.position());
 
+        glm::mat4 viewMatrix = camera.viewMatrix();
         glBindBuffer(GL_UNIFORM_BUFFER, cameraUBO);
         glBufferSubData(GL_UNIFORM_BUFFER, offsetof(CameraMatrices, view), sizeof(glm::mat4), 
-                        glm::value_ptr(camera.viewMatrix()));
+                        glm::value_ptr(viewMatrix));
 
         /*
         dirLight.direction = glm::vec3{glm::rotate(glm::mat4{1.0f}, 0.5f * dt, {0.0f, 0.0f, 1.0f}) 
@@ -291,15 +366,22 @@ void App::run()
         */
 
         //----------------------------------------------------------------------------------------
+        glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+        glViewport(0, 0, shadowMapWidth, shadowMapHeight);
 
-        glBindVertexArray(vao);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
+        glClear(GL_DEPTH_BUFFER_BIT);
+
+        glUseProgram(dirShadowShader);
+        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
+
+        //----------------------------------------------------------------------------------------
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(objShader);
-        //glEnable(GL_DEPTH_TEST);
         uniforms.setUniform(objShader, "u_shininess", terrainInfo.shininess);
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
 

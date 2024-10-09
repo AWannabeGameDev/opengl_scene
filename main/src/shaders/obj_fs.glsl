@@ -12,6 +12,7 @@ in vsOut
     vec3 color;
     vec3 normal;
     vec3 fragPos;
+    vec3 fragPosForDirLight;
 } 
 inp;
 
@@ -23,6 +24,8 @@ layout(std140) uniform lights
 uniform float u_ambience;
 uniform float u_shininess;
 uniform vec3 u_viewPosition;
+
+uniform sampler2D u_dirLightShadowMap;
 
 vec3 calcLighting(DirectionalLight dirLight)
 {
@@ -42,5 +45,16 @@ void main()
     fragColor = vec4(0.0f);
 
     fragColor.rgb += inp.color * u_ambience;
-    fragColor.rgb += calcLighting(u_dirLight);
+
+    float depthBias = 0.001f * (1.0f - dot(inp.normal, -u_dirLight.direction));
+    float nearestDirLightDepth = texture(u_dirLightShadowMap, (inp.fragPosForDirLight.xy * 0.5f) + 0.5f).r;
+    float fragDepthForDirLight = (inp.fragPosForDirLight.z * 0.5f) + 0.5f - depthBias;
+
+    float shadowStrength = 1.0f;
+    if(fragDepthForDirLight <= nearestDirLightDepth)
+    {
+        shadowStrength = 0.0f;
+    }
+
+    fragColor.rgb += (1.0f - shadowStrength) * calcLighting(u_dirLight);
 }
