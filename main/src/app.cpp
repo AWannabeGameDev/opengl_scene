@@ -3,12 +3,14 @@
 #include <gl_util/db_perlin.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <gl_util/texture.h>
+#include <gl_util/raw_model_data.h>
 
 struct Vertex
 {
     glm::vec3 position;
     glm::vec3 normal;
-    glm::vec3 color;
+    glm::vec3 tangent;
+    glm::vec2 texCoord;
 };
 
 struct InstanceData
@@ -25,6 +27,8 @@ struct CameraMatrices
 
 void App::loadModels()
 {
+    using namespace models;
+
     terrainInfo.drawCmd.eboOffset = 0;
     terrainInfo.drawCmd.vboOffset = 0;
     terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
@@ -33,7 +37,7 @@ void App::loadModels()
 
     cubeInfo.drawCmd.eboOffset = terrainInfo.drawCmd.indexCount;
     cubeInfo.drawCmd.vboOffset = terrainVertsCount;
-    cubeInfo.drawCmd.indexCount = 36;
+    cubeInfo.drawCmd.indexCount = cube::NUM_INDICES;
     cubeInfo.drawCmd.instanceCount = 1;
     cubeInfo.drawCmd.instanceOffset = 1;
 
@@ -43,7 +47,8 @@ void App::loadModels()
     glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawIndirect), &terrainInfo.drawCmd);
     glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), sizeof(DrawIndirect), &cubeInfo.drawCmd);
 
-    Vertex verts[terrainVertsCount + cubeVertsCount];
+    Vertex verts[terrainVertsCount + cube::NUM_VERTS];
+    unsigned int indices[terrainInfo.drawCmd.indexCount + cubeInfo.drawCmd.indexCount];
 
     for(int z = 0; z < terrainVertsCountZ; z++)
     {
@@ -54,12 +59,10 @@ void App::loadModels()
                                        z * terrainUnitLength * terrainGenNoiseScale) * 0.5f) + 1.0f;
 
             verts[index].position = {x * terrainUnitLength, height * terrainHeightScale, z * terrainUnitLength};
-            verts[index].color = {0.0f, 1.0f, 0.0f}; //{height, height, height};
+            verts[index].texCoord = glm::vec2{verts[index].position.x, verts[index].position.z} / 20.0f;
             verts[index].normal = {0.0f, 0.0f, 0.0f};
         }
     }
-
-    unsigned int indices[terrainInfo.drawCmd.indexCount + cubeInfo.drawCmd.indexCount];
 
     for(int z = 0; z < (terrainVertsCountZ - 1); z++)
     {
@@ -84,6 +87,8 @@ void App::loadModels()
             verts[tri2vert2].normal += tri2normal;
             verts[tri2vert3].normal += tri2normal;
 
+            // TODO: Generate tangents
+
             int elemIndex = 6 * (x + (z * (terrainVertsCountX - 1)));
             indices[elemIndex] = tri1vert1;
             indices[elemIndex + 1] = tri1vert2;
@@ -99,29 +104,16 @@ void App::loadModels()
         verts[index].normal = glm::normalize(verts[index].normal);
     }
 
-    for(int x = -1; x <= 1; x += 2)
+    glm::vec2 cubeTexCoords[4] = {{1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}};
+
+    for(int index = terrainVertsCount; index < (terrainVertsCount + cube::NUM_VERTS); index++)
     {
-        for(int y = -1; y <= 1; y += 2)
-        {
-            for(int z = -1; z <= 1; z += 2)
-            {
-                int index = terrainVertsCount + 3 * ((2 * (x + 1)) + (y + 1) + ((z + 1) / 2));
-                verts[index].position = verts[index + 1].position = verts[index + 2].position 
-                = {x * 0.5f, y * 0.5f, z * 0.5f};
-
-                verts[index].normal = {(float)x, 0.0f, 0.0f};
-                verts[index + 1].normal = {0.0f, (float)y, 0.0f};
-                verts[index + 2].normal = {0.0f, 0.0f, (float)z};
-
-                verts[index].color = verts[index + 1].color = verts[index + 2].color = {1.0f, 0.0f, 0.0f};
-            }
-        }
+        verts[index].position = cube::positions[index - terrainVertsCount];
+        verts[index].normal = cube::normals[index - terrainVertsCount];
+        verts[index].texCoord = cubeTexCoords[(index - terrainVertsCount) % 4];
     }
 
-    for(int face = 0; face < 3; face++)
-    {
-        
-    }
+    std::copy(cube::indices, cube::indices + cube::NUM_INDICES, indices + terrainInfo.drawCmd.indexCount);
 
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -135,8 +127,56 @@ void App::loadModels()
 void App::loadTextures()
 {
     terrainInfo.shininess = 16.0f;
+    cubeInfo.shininess = 64.0f;
+
+    TextureParameterSet texParams =
+    {
+        .minFilter = GL_LINEAR_MIPMAP_LINEAR,
+        .magFilter = GL_LINEAR,
+        .texWrapS = GL_REPEAT,
+        .texWrapT = GL_REPEAT,
+        .texWrapR = GL_REPEAT
+    };
+
+    terrainInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB, "../res/grass.png", true);
+    terrainInfo.normalID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB, "../res/grass_normal.png", true);
+
+    texParams.minFilter = GL_NEAREST;
+    texParams.magFilter = GL_NEAREST;
+
+    terrainInfo.specularID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
+    cubeInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
+    cubeInfo.specularID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
+    defaultNormalMap = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
+
+    glm::vec3 terrainSpecularColor = {0.0f, 0.0f, 0.0f};
+    glm::vec3 cubeDiffuseColor = {1.0f, 0.0f, 0.0f};
+    glm::vec3 cubeSpecularColor = {1.0f, 1.0f, 1.0f};
+    glm::vec3 defaultNormalColor = {0.5f, 0.5f, 1.0f};
+
+    glBindTexture(GL_TEXTURE_2D, terrainInfo.specularID);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGB, GL_FLOAT, (const void*)&terrainSpecularColor);
+
+    glBindTexture(GL_TEXTURE_2D, cubeInfo.diffuseID);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGB, GL_FLOAT, (const void*)&cubeDiffuseColor);
+
+    glBindTexture(GL_TEXTURE_2D, cubeInfo.specularID);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGB, GL_FLOAT, (const void*)&cubeSpecularColor);
+
+    glBindTexture(GL_TEXTURE_2D, defaultNormalMap);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 1, 1, GL_RGB, GL_FLOAT, (const void*)&defaultNormalColor);
+
+    cubeInfo.normalID = defaultNormalMap;
 
     uniforms.addUniform(objShader, "u_shininess");
+    uniforms.addUniform(objShader, "u_diffuse");
+    uniforms.addUniform(objShader, "u_specular");
+    uniforms.addUniform(objShader, "u_normal");
+
+    glUseProgram(objShader);
+    uniforms.setUniform(objShader, "u_diffuse", DIFFUSE_TEXTURE_UNIT);
+    uniforms.setUniform(objShader, "u_specular", SPECULAR_TEXTURE_UNIT);
+    uniforms.setUniform(objShader, "u_normal", NORMAL_TEXTURE_UNIT);
 }
 
 void App::createObjects()
@@ -144,19 +184,27 @@ void App::createObjects()
     terrainTransform = glm::mat4{1.0f};
     terrainNormalMatrix = glm::mat3{glm::inverse(glm::transpose(terrainTransform))};
 
+    cubeTransform = glm::translate(glm::mat4{1.0f}, {25.0f, 20.0f, 25.0f})
+                    * glm::scale(glm::mat4{1.0f}, {4.0f, 4.0f, 4.0f});
+    cubeNormalMatrix = glm::mat3{glm::inverse(glm::transpose(cubeTransform))};
+
     glGenBuffers(1, &instanceVbo);
     glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, offsetof(InstanceData, modelMatrix), sizeof(glm::mat4), glm::value_ptr(terrainTransform));
     glBufferSubData(GL_ARRAY_BUFFER, offsetof(InstanceData, normalMatrix), sizeof(glm::mat3), 
                     glm::value_ptr(terrainNormalMatrix));
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(InstanceData) + offsetof(InstanceData, modelMatrix), sizeof(glm::mat4), 
+                    glm::value_ptr(cubeTransform));
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(InstanceData) + offsetof(InstanceData, normalMatrix), sizeof(glm::mat3), 
+                    glm::value_ptr(cubeNormalMatrix));
 }
 
 void App::createLightSources()
 {
-    dirLight.direction = glm::normalize(glm::vec3{1.0f, -1.0f, 1.0f});
+    dirLight.direction = glm::normalize(glm::vec3{1.0f, -1.0f, 2.0f});
     dirLight.diffuseColor = {0.8f, 0.8f, 0.8f};
-    dirLight.specularColor = {0.2f, 0.2f, 0.2f};
+    dirLight.specularColor = {0.5f, 0.5f, 0.5f};
 
     glGenBuffers(1, &lightsUBO);
     glBindBuffer(GL_UNIFORM_BUFFER, lightsUBO);
@@ -231,9 +279,13 @@ void App::configureVAO()
     glVertexAttribBinding(VERTEX_NORMAL_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
     glEnableVertexAttribArray(VERTEX_NORMAL_ATTRIB_INDEX);
 
-    glVertexAttribFormat(VERTEX_COLOR_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, color));
-    glVertexAttribBinding(VERTEX_COLOR_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
-    glEnableVertexAttribArray(VERTEX_COLOR_ATTRIB_INDEX);
+    glVertexAttribFormat(VERTEX_TANGENT_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, tangent));
+    glVertexAttribBinding(VERTEX_TANGENT_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_TANGENT_ATTRIB_INDEX);
+
+    glVertexAttribFormat(VERTEX_TEXCOORD_ATTRIB_INDEX, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, texCoord));
+    glVertexAttribBinding(VERTEX_TEXCOORD_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_TEXCOORD_ATTRIB_INDEX);
 
     for(int i = 0; i < 4; i++)
     {
@@ -372,18 +424,33 @@ void App::run()
         glClear(GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(dirShadowShader);
-        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
+        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0, 2, sizeof(DrawIndirect));
 
         //----------------------------------------------------------------------------------------
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, screenWidth, screenHeight);
 
         glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(objShader);
+
+        glActiveTexture(GL_TEXTURE0 + DIFFUSE_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, terrainInfo.diffuseID);
+        glActiveTexture(GL_TEXTURE0 + SPECULAR_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, terrainInfo.specularID);
+
         uniforms.setUniform(objShader, "u_shininess", terrainInfo.shininess);
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
+
+        glActiveTexture(GL_TEXTURE0 + DIFFUSE_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, cubeInfo.diffuseID);
+        glActiveTexture(GL_TEXTURE0 + SPECULAR_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, cubeInfo.specularID);
+
+        uniforms.setUniform(objShader, "u_shininess", cubeInfo.shininess);
+        glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)sizeof(DrawIndirect));
 
         /*
         glUseProgram(normalShader);

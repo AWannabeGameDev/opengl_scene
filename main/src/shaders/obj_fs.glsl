@@ -9,8 +9,8 @@ struct DirectionalLight
 
 in vsOut
 {
-    vec3 color;
-    vec3 normal;
+    vec2 texCoord;
+    mat3 tbnMatrix;
     vec3 fragPos;
     vec3 fragPosForDirLight;
 } 
@@ -21,39 +21,59 @@ layout(std140) uniform lights
     DirectionalLight u_dirLight;
 };
 
+uniform sampler2D u_diffuse;
+uniform sampler2D u_specular;
+uniform sampler2D u_normal
+
 uniform float u_ambience;
 uniform float u_shininess;
 uniform vec3 u_viewPosition;
 
 uniform sampler2D u_dirLightShadowMap;
 
+out vec4 fragColor;
+
+float shadowSampleBlurScale = 0.003f;
+float depthBias = 0.1f * (1.0f - dot(inp.normal, -u_dirLight.direction));
+
+vec3 diffuseColor = texture(u_diffuse, inp.texCoord).rgb;
+vec3 specularColor = texture(u_specular, inp.texCoord).rgb;
+
+vec3 normal = tbnMatrix * texture(u_normal, inp.texCoord);
+
 vec3 calcLighting(DirectionalLight dirLight)
 {
-    vec3 diffuseColor = inp.color * dirLight.diffuseColor * clamp(dot(-dirLight.direction, inp.normal), 0.0f, 1.0f);
+    vec3 diffuseLighting = diffuseColor * dirLight.diffuseColor * clamp(dot(-dirLight.direction, normal), 0.0f, 1.0f);
 
     vec3 halfwayVector = normalize(-dirLight.direction + normalize(u_viewPosition - inp.fragPos));
-    float specularStrength = pow(clamp(dot(inp.normal, halfwayVector), 0.0f, 1.0f), u_shininess);
-    vec3 specularColor = inp.color * dirLight.specularColor * specularStrength;
+    float specularStrength = pow(clamp(dot(normal, halfwayVector), 0.0f, 1.0f), u_shininess);
+    vec3 specularLighting = specularColor * dirLight.specularColor * specularStrength;
 
-    return diffuseColor + specularColor;
+    return diffuseLighting + specularLighting;
 }
-
-out vec4 fragColor;
 
 void main()
 {
     fragColor = vec4(0.0f);
 
-    fragColor.rgb += inp.color * u_ambience;
-
-    float depthBias = 0.001f * (1.0f - dot(inp.normal, -u_dirLight.direction));
-    float nearestDirLightDepth = texture(u_dirLightShadowMap, (inp.fragPosForDirLight.xy * 0.5f) + 0.5f).r;
-    float fragDepthForDirLight = (inp.fragPosForDirLight.z * 0.5f) + 0.5f - depthBias;
+    fragColor.rgb += diffuseColor * u_ambience;
 
     float shadowStrength = 1.0f;
-    if(fragDepthForDirLight <= nearestDirLightDepth)
+    
+    for(int i = -1; i <= 1; i++)
     {
-        shadowStrength = 0.0f;
+        for(int j = -1; j <= 1; j++)
+        {
+            vec2 shadowSampleTexCoord = (inp.fragPosForDirLight.xy * 0.5f) + 0.5f + (shadowSampleBlurScale * vec2(i, j));
+
+            float nearestDirLightDepth = texture(u_dirLightShadowMap, shadowSampleTexCoord).r;
+            float fragDepthForDirLight = (inp.fragPosForDirLight.z * 0.5f) + 0.5f - depthBias;
+
+            if(fragDepthForDirLight <= nearestDirLightDepth)
+            {
+                shadowStrength -= 1.0f / 9.0f;
+            }
+        }
     }
 
     fragColor.rgb += (1.0f - shadowStrength) * calcLighting(u_dirLight);

@@ -20,6 +20,9 @@ struct DrawIndirect
 struct ModelInfo
 {
     DrawIndirect drawCmd;
+    unsigned int diffuseID;
+    unsigned int specularID;
+    unsigned int normalID;
     float shininess;
 };
 
@@ -28,9 +31,10 @@ class App
 private :
     static constexpr unsigned int VERTEX_POS_ATTRIB_INDEX = 0,
     VERTEX_NORMAL_ATTRIB_INDEX = 1,
-    VERTEX_COLOR_ATTRIB_INDEX = 2,
-    VERTEX_TRANSFORM_ATTRIB_INDEX = 3,
-    VERTEX_NORMAL_MATRIX_ATTRIB_INDEX = 7;
+    VERTEX_TANGENT_ATTRIB_INDEX = 2,
+    VERTEX_TEXCOORD_ATTRIB_INDEX = 3,
+    VERTEX_TRANSFORM_ATTRIB_INDEX = 4,
+    VERTEX_NORMAL_MATRIX_ATTRIB_INDEX = 8;
 
     static constexpr unsigned int VERTEX_DATA_BINDING_POINT = 0,
     INSTANCE_DATA_BINDING_POINT = 1;
@@ -39,7 +43,10 @@ private :
     CAMERA_MATRICES_UNI_BINDING = 1,
     DIRLIGHT_MATRIX_UNI_BINDING = 2;
 
-    static constexpr int DIR_SHADOWMAP_TEXTURE_UNIT = 0;
+    static constexpr int DIR_SHADOWMAP_TEXTURE_UNIT = 0,
+    DIFFUSE_TEXTURE_UNIT = 1,
+    SPECULAR_TEXTURE_UNIT = 2,
+    NORMAL_TEXTURE_UNIT = 3;
 
     int screenWidth = 1280;
     int screenHeight = 720;
@@ -63,8 +70,10 @@ private :
     unsigned int normalShader;
     unsigned int dirShadowShader;
 
-    float camSens = 3.0f;
-    float camSpeed = 13.0f;
+    unsigned int defaultNormalMap;
+
+    float camSens = 1.5f;
+    float camSpeed = 10.0f;
     Camera camera;
 
     ModelInfo terrainInfo;
@@ -72,19 +81,21 @@ private :
     int terrainVertsCountZ = 25;
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
     float terrainUnitLength = 2.0f;
-    float terrainHeightScale = 10.0f;
+    float terrainHeightScale = 13.0f;
     float terrainGenNoiseScale = 0.06f;
     glm::mat4 terrainTransform;
     glm::mat3 terrainNormalMatrix;
 
     ModelInfo cubeInfo;
+    glm::mat4 cubeTransform;
+    glm::mat3 cubeNormalMatrix;
     int cubeVertsCount = 24;
 
     DirectionalLight dirLight;
     glm::mat4 dirLightMatrix;
     unsigned int dirLightShadowMap;
-    int shadowMapWidth = 2048;
-    int shadowMapHeight = 2048;
+    int shadowMapWidth = 4096;
+    int shadowMapHeight = 4096;
     float ambience = 0.1f;
 
     unsigned int shadowFBO;
