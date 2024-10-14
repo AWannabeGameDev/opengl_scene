@@ -145,18 +145,18 @@ void App::loadTextures()
         .texWrapR = GL_REPEAT
     };
 
-    terrainInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB, "../res/grass.png", true);
+    terrainInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_SRGB, "../res/grass.png", true);
     terrainInfo.normalID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB, "../res/grass_normal.png", true);
 
     texParams.minFilter = GL_NEAREST;
     texParams.magFilter = GL_NEAREST;
 
     terrainInfo.specularID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
-    cubeInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
+    cubeInfo.diffuseID = createTexture(GL_TEXTURE_2D, texParams, GL_SRGB, 1, 1);
     cubeInfo.specularID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
     defaultNormalMap = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
 
-    glm::vec3 terrainSpecularColor = {0.1f, 0.1f, 0.1f};
+    glm::vec3 terrainSpecularColor = {0.0f, 0.0f, 0.0f};
     glm::vec3 cubeDiffuseColor = {1.0f, 0.0f, 0.0f};
     glm::vec3 cubeSpecularColor = {0.5f, 0.5f, 0.5f};
     glm::vec3 defaultNormalColor = {0.5f, 0.5f, 1.0f};
@@ -246,10 +246,8 @@ void App::createLightSources()
         .texWrapT = GL_CLAMP_TO_EDGE,
         .texWrapR = GL_CLAMP_TO_EDGE
     };
-    dirLightShadowMap = createTexture(GL_TEXTURE_2D, texParams, GL_DEPTH_COMPONENT24, shadowMapWidth, shadowMapHeight);
 
-    glActiveTexture(GL_TEXTURE0 + DIR_SHADOWMAP_TEXTURE_UNIT);
-    glBindTexture(GL_TEXTURE_2D, dirLightShadowMap);
+    dirLightShadowMap = createTexture(GL_TEXTURE_2D, texParams, GL_DEPTH_COMPONENT24, shadowMapWidth, shadowMapHeight);
 
     glGenFramebuffers(1, &shadowFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
@@ -324,6 +322,37 @@ void App::configureCamera()
     glBindBufferBase(GL_UNIFORM_BUFFER, CAMERA_MATRICES_UNI_BINDING, cameraUBO);
 }
 
+void App::configurePostFBO()
+{
+    TextureParameterSet texParams =
+    {
+        .minFilter = GL_LINEAR,
+        .magFilter = GL_LINEAR,
+        .texWrapS = GL_CLAMP_TO_BORDER,
+        .texWrapT = GL_CLAMP_TO_BORDER,
+        .texWrapR = GL_CLAMP_TO_BORDER
+    };
+
+    postFBOColorTexture = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, screenWidth, screenHeight);
+
+    glGenRenderbuffers(1, &postFBODepthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, postFBODepthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, screenWidth, screenHeight);
+
+    glGenFramebuffers(1, &postFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, postFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, postFBOColorTexture, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, postFBODepthRBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    uniforms.addUniform(postShader, "u_gamma");
+    uniforms.addUniform(postShader, "u_colorTexture");
+
+    glUseProgram(postShader);
+    uniforms.setUniform(postShader, "u_gamma", gamma);
+    uniforms.setUniform(postShader, "u_colorTexture", POSTCOLOR_TEXTURE_UNIT);
+}
+
 void App::configureInputs()
 {
     keys.setKeybind("FORWARD", GLFW_KEY_W);
@@ -341,7 +370,8 @@ App::App() :
     objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")},
     normalShader{createShaderProgram("../src/shaders/normal_vs.glsl", "../src/shaders/normal_gs.glsl", 
                                      "../src/shaders/normal_fs.glsl")},
-    dirShadowShader{createShaderProgram("../src/shaders/dir_shadowmap_vs.glsl", "../src/shaders/dir_shadowmap_fs.glsl")}
+    dirShadowShader{createShaderProgram("../src/shaders/dir_shadowmap_vs.glsl", "../src/shaders/dir_shadowmap_fs.glsl")},
+    postShader{createShaderProgram("../src/shaders/post_vs.glsl", "../src/shaders/post_fs.glsl")}
 {
     glDebugMessageCallback(glDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
@@ -356,6 +386,7 @@ App::App() :
     createLightSources();
     configureVAO();
     configureCamera();
+    configurePostFBO();
     configureInputs();
 }
 
@@ -427,6 +458,7 @@ void App::run()
         //----------------------------------------------------------------------------------------
         glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
         glViewport(0, 0, shadowMapWidth, shadowMapHeight);
+        glEnable(GL_DEPTH_TEST);
 
         glClear(GL_DEPTH_BUFFER_BIT);
 
@@ -435,10 +467,12 @@ void App::run()
 
         //----------------------------------------------------------------------------------------
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, postFBO);
         glViewport(0, 0, screenWidth, screenHeight);
+        glActiveTexture(GL_TEXTURE0 + DIR_SHADOWMAP_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, dirLightShadowMap);
 
-        glClearColor(0.1f, 0.1f, 0.1f, 0.0f);
+        glClearColor(0.03f, 0.03f, 0.03f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(objShader);
@@ -471,6 +505,20 @@ void App::run()
         glDrawArraysInstancedBaseInstance(GL_POINTS, cubeInfo.drawCmd.vboOffset, cube::NUM_VERTS, 1,
                                           cubeInfo.drawCmd.instanceCount);
         #endif
+
+        //-----------------------------------------------------------------------------------------------
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDisable(GL_DEPTH_TEST);
+        glActiveTexture(GL_TEXTURE0 + POSTCOLOR_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, postFBOColorTexture);
+
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glUseProgram(postShader);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
 
         glfwSwapBuffers(window);
     }

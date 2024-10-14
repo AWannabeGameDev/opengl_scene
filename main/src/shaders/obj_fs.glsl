@@ -68,7 +68,7 @@ void main()
 
             float nearestDirLightDepth = texture(u_dirLightShadowMap, shadowSampleTexCoord).r;
             float fragDepthForDirLight = (inp.fragPosForDirLight.z * 0.5f) + 0.5f - depthBias;
-
+            
             if(fragDepthForDirLight <= nearestDirLightDepth)
             {
                 shadowStrength -= 1.0f / 9.0f;

@@ -43,10 +43,11 @@ private :
     CAMERA_MATRICES_UNI_BINDING = 1,
     DIRLIGHT_MATRIX_UNI_BINDING = 2;
 
-    static constexpr int DIR_SHADOWMAP_TEXTURE_UNIT = 0,
-    DIFFUSE_TEXTURE_UNIT = 1,
-    SPECULAR_TEXTURE_UNIT = 2,
-    NORMAL_TEXTURE_UNIT = 3;
+    static constexpr int POSTCOLOR_TEXTURE_UNIT = 0,
+    DIR_SHADOWMAP_TEXTURE_UNIT = 1,
+    DIFFUSE_TEXTURE_UNIT = 2,
+    SPECULAR_TEXTURE_UNIT = 3,
+    NORMAL_TEXTURE_UNIT = 4;
 
     int screenWidth = 1280;
     int screenHeight = 720;
@@ -80,7 +81,7 @@ private :
     int terrainVertsCountX = 25;
     int terrainVertsCountZ = 25;
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
-    float terrainUnitLength = 2.0f;
+    float terrainUnitLength = 5.0f;
     float terrainHeightScale = 13.0f;
     float terrainGenNoiseScale = 0.06f;
     glm::mat4 terrainTransform;
@@ -100,12 +101,19 @@ private :
 
     unsigned int shadowFBO;
 
+    unsigned int postFBO;
+    unsigned int postFBOColorTexture;
+    unsigned int postFBODepthRBO;
+    unsigned int postShader;
+    float gamma = 2.2f;
+
     void loadModels();
     void loadTextures();
     void createObjects();
     void createLightSources();
     void configureVAO();
     void configureCamera();
+    void configurePostFBO();
     void configureInputs();
 
 public :
