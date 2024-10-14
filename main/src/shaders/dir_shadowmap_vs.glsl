@@ -1,7 +1,7 @@
 #version 460 core
 
 layout(location = 0) in vec3 v_pos;
-layout(location = 3) in mat4 v_model;
+layout(location = 4) in mat4 v_model;
 
 layout(std140) uniform dirLightMatrix
 {

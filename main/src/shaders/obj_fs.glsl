@@ -23,7 +23,7 @@ layout(std140) uniform lights
 
 uniform sampler2D u_diffuse;
 uniform sampler2D u_specular;
-uniform sampler2D u_normal
+uniform sampler2D u_normal;
 
 uniform float u_ambience;
 uniform float u_shininess;
@@ -33,13 +33,13 @@ uniform sampler2D u_dirLightShadowMap;
 
 out vec4 fragColor;
 
+vec3 normal = inp.tbnMatrix * texture(u_normal, inp.texCoord).rgb;
+
 float shadowSampleBlurScale = 0.003f;
-float depthBias = 0.1f * (1.0f - dot(inp.normal, -u_dirLight.direction));
+float depthBias = 0.01f * (1.0f - dot(normal, -u_dirLight.direction));
 
 vec3 diffuseColor = texture(u_diffuse, inp.texCoord).rgb;
 vec3 specularColor = texture(u_specular, inp.texCoord).rgb;
-
-vec3 normal = tbnMatrix * texture(u_normal, inp.texCoord);
 
 vec3 calcLighting(DirectionalLight dirLight)
 {

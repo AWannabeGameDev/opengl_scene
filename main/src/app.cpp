@@ -5,6 +5,8 @@
 #include <gl_util/texture.h>
 #include <gl_util/raw_model_data.h>
 
+using namespace models;
+
 struct Vertex
 {
     glm::vec3 position;
@@ -27,8 +29,6 @@ struct CameraMatrices
 
 void App::loadModels()
 {
-    using namespace models;
-
     terrainInfo.drawCmd.eboOffset = 0;
     terrainInfo.drawCmd.vboOffset = 0;
     terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
@@ -87,8 +87,6 @@ void App::loadModels()
             verts[tri2vert2].normal += tri2normal;
             verts[tri2vert3].normal += tri2normal;
 
-            // TODO: Generate tangents
-
             int elemIndex = 6 * (x + (z * (terrainVertsCountX - 1)));
             indices[elemIndex] = tri1vert1;
             indices[elemIndex + 1] = tri1vert2;
@@ -102,14 +100,23 @@ void App::loadModels()
     for(int index = 0; index < (terrainVertsCountX * terrainVertsCountZ); index++)
     {
         verts[index].normal = glm::normalize(verts[index].normal);
+        verts[index].tangent = glm::normalize(glm::cross(verts[index].normal, {0.0f, 0.0f, 1.0f}));
     }
 
-    glm::vec2 cubeTexCoords[4] = {{1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}};
+    glm::vec2 cubeTexCoords[4] = {{1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    glm::vec3 cubeTangents[3] =
+    {
+        {0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f},
+        {1.0f, 0.0f, 0.0f}
+    };
 
     for(int index = terrainVertsCount; index < (terrainVertsCount + cube::NUM_VERTS); index++)
     {
         verts[index].position = cube::positions[index - terrainVertsCount];
         verts[index].normal = cube::normals[index - terrainVertsCount];
+        verts[index].tangent = cubeTangents[(int)((index - terrainVertsCount) / 8.0f)];
         verts[index].texCoord = cubeTexCoords[(index - terrainVertsCount) % 4];
     }
 
@@ -127,7 +134,7 @@ void App::loadModels()
 void App::loadTextures()
 {
     terrainInfo.shininess = 16.0f;
-    cubeInfo.shininess = 64.0f;
+    cubeInfo.shininess = 32.0f;
 
     TextureParameterSet texParams =
     {
@@ -149,9 +156,9 @@ void App::loadTextures()
     cubeInfo.specularID = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
     defaultNormalMap = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, 1, 1);
 
-    glm::vec3 terrainSpecularColor = {0.0f, 0.0f, 0.0f};
+    glm::vec3 terrainSpecularColor = {0.1f, 0.1f, 0.1f};
     glm::vec3 cubeDiffuseColor = {1.0f, 0.0f, 0.0f};
-    glm::vec3 cubeSpecularColor = {1.0f, 1.0f, 1.0f};
+    glm::vec3 cubeSpecularColor = {0.5f, 0.5f, 0.5f};
     glm::vec3 defaultNormalColor = {0.5f, 0.5f, 1.0f};
 
     glBindTexture(GL_TEXTURE_2D, terrainInfo.specularID);
@@ -440,6 +447,8 @@ void App::run()
         glBindTexture(GL_TEXTURE_2D, terrainInfo.diffuseID);
         glActiveTexture(GL_TEXTURE0 + SPECULAR_TEXTURE_UNIT);
         glBindTexture(GL_TEXTURE_2D, terrainInfo.specularID);
+        glActiveTexture(GL_TEXTURE0 + NORMAL_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, terrainInfo.normalID);
 
         uniforms.setUniform(objShader, "u_shininess", terrainInfo.shininess);
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
@@ -448,15 +457,20 @@ void App::run()
         glBindTexture(GL_TEXTURE_2D, cubeInfo.diffuseID);
         glActiveTexture(GL_TEXTURE0 + SPECULAR_TEXTURE_UNIT);
         glBindTexture(GL_TEXTURE_2D, cubeInfo.specularID);
+        glActiveTexture(GL_TEXTURE0 + NORMAL_TEXTURE_UNIT);
+        glBindTexture(GL_TEXTURE_2D, cubeInfo.normalID);
 
         uniforms.setUniform(objShader, "u_shininess", cubeInfo.shininess);
         glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)sizeof(DrawIndirect));
 
-        /*
+        #if 0 
         glUseProgram(normalShader);
         //glDisable(GL_DEPTH_TEST);
-        glDrawArrays(GL_POINTS, terrainInfo.drawCmd.vboOffset, terrainVertsCountX * terrainVertsCountZ);
-        */
+        glDrawArraysInstancedBaseInstance(GL_POINTS, terrainInfo.drawCmd.vboOffset, terrainVertsCount, 1, 
+                                          terrainInfo.drawCmd.instanceOffset);
+        glDrawArraysInstancedBaseInstance(GL_POINTS, cubeInfo.drawCmd.vboOffset, cube::NUM_VERTS, 1,
+                                          cubeInfo.drawCmd.instanceCount);
+        #endif
 
         glfwSwapBuffers(window);
     }
