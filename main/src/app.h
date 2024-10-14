@@ -83,7 +83,7 @@ private :
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
     float terrainUnitLength = 5.0f;
     float terrainHeightScale = 13.0f;
-    float terrainGenNoiseScale = 0.06f;
+    float terrainGenNoiseScale = 0.03f;
     glm::mat4 terrainTransform;
     glm::mat3 terrainNormalMatrix;
 
