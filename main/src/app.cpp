@@ -29,26 +29,8 @@ struct CameraMatrices
 
 void App::loadModels()
 {
-    terrainInfo.drawCmd.eboOffset = 0;
-    terrainInfo.drawCmd.vboOffset = 0;
-    terrainInfo.drawCmd.indexCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
-    terrainInfo.drawCmd.instanceCount = 1;
-    terrainInfo.drawCmd.instanceOffset = 0;
-
-    cubeInfo.drawCmd.eboOffset = terrainInfo.drawCmd.indexCount;
-    cubeInfo.drawCmd.vboOffset = terrainVertsCount;
-    cubeInfo.drawCmd.indexCount = cube::NUM_INDICES;
-    cubeInfo.drawCmd.instanceCount = 1;
-    cubeInfo.drawCmd.instanceOffset = 1;
-
-    glGenBuffers(1, &dibo);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
-    glBufferData(GL_DRAW_INDIRECT_BUFFER, 2 * sizeof(DrawIndirect), nullptr, GL_STATIC_DRAW);
-    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawIndirect), &terrainInfo.drawCmd);
-    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), sizeof(DrawIndirect), &cubeInfo.drawCmd);
-
-    Vertex verts[terrainVertsCount + cube::NUM_VERTS];
-    unsigned int indices[terrainInfo.drawCmd.indexCount + cubeInfo.drawCmd.indexCount];
+    Vertex verts[terrainVertsCount + cube::NUM_VERTS + (3 * xysquare::NUM_VERTS)];
+    unsigned int indices[terrainIndicesCount + cube::NUM_INDICES + (3 * xysquare::NUM_INDICES)];
 
     for(int z = 0; z < terrainVertsCountZ; z++)
     {
@@ -103,24 +85,68 @@ void App::loadModels()
         verts[index].tangent = glm::normalize(glm::cross(verts[index].normal, {0.0f, 0.0f, 1.0f}));
     }
 
-    glm::vec2 cubeTexCoords[4] = {{1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+    terrainInfo.drawCmd.eboOffset = 0;
+    terrainInfo.drawCmd.vboOffset = 0;
+    terrainInfo.drawCmd.indexCount = terrainIndicesCount;
+    terrainInfo.drawCmd.instanceCount = 1;
+    terrainInfo.drawCmd.instanceOffset = 0;
 
-    glm::vec3 cubeTangents[3] =
+    glm::vec2 planeTexCoords[] = {{1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}};
+
+    glm::vec3 cubeTangents[] =
     {
         {0.0f, 1.0f, 0.0f},
         {0.0f, 0.0f, 1.0f},
         {1.0f, 0.0f, 0.0f}
     };
 
-    for(int index = terrainVertsCount; index < (terrainVertsCount + cube::NUM_VERTS); index++)
+    for(int vertIndex = 0; vertIndex < cube::NUM_VERTS; vertIndex++)
     {
-        verts[index].position = cube::positions[index - terrainVertsCount];
-        verts[index].normal = cube::normals[index - terrainVertsCount];
-        verts[index].tangent = cubeTangents[(int)((index - terrainVertsCount) / 8.0f)];
-        verts[index].texCoord = cubeTexCoords[(index - terrainVertsCount) % 4];
+        int vboIndex = vertIndex + terrainVertsCount;
+        verts[vboIndex].position = cube::positions[vertIndex];
+        verts[vboIndex].normal = cube::normals[vertIndex];
+        verts[vboIndex].tangent = cubeTangents[(int)(vertIndex / 8.0f)];
+        verts[vboIndex].texCoord = planeTexCoords[vertIndex % 4];
     }
 
-    std::copy(cube::indices, cube::indices + cube::NUM_INDICES, indices + terrainInfo.drawCmd.indexCount);
+    std::copy(cube::indices, cube::indices + cube::NUM_INDICES, indices + terrainInfo.drawCmd.eboOffset + terrainIndicesCount);
+
+    cubeInfo.drawCmd.eboOffset = terrainInfo.drawCmd.eboOffset + terrainInfo.drawCmd.indexCount;
+    cubeInfo.drawCmd.vboOffset = terrainInfo.drawCmd.vboOffset + terrainVertsCountX;
+    cubeInfo.drawCmd.indexCount = cube::NUM_INDICES;
+    cubeInfo.drawCmd.instanceCount = 1;
+    cubeInfo.drawCmd.instanceOffset = terrainInfo.drawCmd.instanceOffset + terrainInfo.drawCmd.instanceCount;
+
+    glm::mat3 grassBoardRotate[] = 
+    {
+        glm::mat3{1.0f},
+        glm::mat3{glm::rotate(glm::mat4{1.0f}, glm::radians(60.0f), {0.0f, 1.0f, 0.0f})},
+        glm::mat3{glm::rotate(glm::mat4{1.0f}, glm::radians(120.0f), {0.0f, 1.0f, 0.0f})}
+    };
+
+    for(int board = 0; board < 3; board++)
+    {
+        for(int vertIndex = 0; vertIndex < xysquare::NUM_VERTS; vertIndex++)
+        {
+            int vboIndex = vertIndex + (board * xysquare::NUM_VERTS) + terrainVertsCount + cube::NUM_VERTS;
+            verts[vboIndex].position = grassBoardRotate[board] * xysquare::positions[vertIndex];
+            verts[vboIndex].normal = grassBoardRotate[board] * xysquare::normals[vertIndex];
+            verts[vboIndex].tangent = grassBoardRotate[board] * glm::vec3{1.0f, 0.0f, 0.0f};
+            verts[vboIndex].texCoord = planeTexCoords[vertIndex];
+        }
+
+        for(int elemIndex = 0; elemIndex < xysquare::NUM_INDICES; elemIndex++)
+        {
+            int eboIndex = elemIndex + (board * xysquare::NUM_INDICES) + cubeInfo.drawCmd.eboOffset + cube::NUM_INDICES;
+            indices[eboIndex] = xysquare::indices[elemIndex] + (board * xysquare::NUM_INDICES);
+        }
+    }
+
+    grassInfo.drawCmd.eboOffset = cubeInfo.drawCmd.eboOffset + cubeInfo.drawCmd.indexCount;
+    grassInfo.drawCmd.vboOffset = cubeInfo.drawCmd.vboOffset + cube::NUM_VERTS;
+    grassInfo.drawCmd.indexCount = 3 * xysquare::NUM_INDICES;
+    grassInfo.drawCmd.instanceCount = grassBoardsCount;
+    grassInfo.drawCmd.instanceOffset = cubeInfo.drawCmd.instanceOffset + cubeInfo.drawCmd.instanceCount;
 
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -129,6 +155,13 @@ void App::loadModels()
     glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &dibo);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
+    glBufferData(GL_DRAW_INDIRECT_BUFFER, 3 * sizeof(DrawIndirect), nullptr, GL_STATIC_DRAW);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawIndirect), &terrainInfo.drawCmd);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), sizeof(DrawIndirect), &cubeInfo.drawCmd);
+    glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 2 * sizeof(DrawIndirect), sizeof(DrawIndirect), &grassInfo.drawCmd);
 }
 
 void App::loadTextures()

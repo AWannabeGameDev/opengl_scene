@@ -81,6 +81,7 @@ private :
     int terrainVertsCountX = 25;
     int terrainVertsCountZ = 25;
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
+    int terrainIndicesCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ);
     float terrainUnitLength = 5.0f;
     float terrainHeightScale = 13.0f;
     float terrainGenNoiseScale = 0.03f;
@@ -90,7 +91,9 @@ private :
     ModelInfo cubeInfo;
     glm::mat4 cubeTransform;
     glm::mat3 cubeNormalMatrix;
-    int cubeVertsCount = 24;
+
+    ModelInfo grassInfo;
+    int grassBoardsCount = 1000;
 
     DirectionalLight dirLight;
     glm::mat4 dirLightMatrix;
