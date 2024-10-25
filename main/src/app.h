@@ -43,11 +43,12 @@ private :
     CAMERA_MATRICES_UNI_BINDING = 1,
     DIRLIGHT_MATRIX_UNI_BINDING = 2;
 
-    static constexpr int POSTCOLOR_TEXTURE_UNIT = 0,
-    DIR_SHADOWMAP_TEXTURE_UNIT = 1,
-    DIFFUSE_TEXTURE_UNIT = 2,
-    SPECULAR_TEXTURE_UNIT = 3,
-    NORMAL_TEXTURE_UNIT = 4;
+    static constexpr int POSTCOLOR_TEXTURE_UNIT = 1,
+    DIR_SHADOWMAP_TEXTURE_UNIT = 2,
+    TERRAIN_MAP_TEXTURE_UNIT = 3,
+    DIFFUSE_TEXTURE_UNIT = 4,
+    SPECULAR_TEXTURE_UNIT = 5,
+    NORMAL_TEXTURE_UNIT = 6;
 
     int screenWidth = 1280;
     int screenHeight = 720;
@@ -70,6 +71,7 @@ private :
     unsigned int objShader;
     unsigned int normalShader;
     unsigned int dirShadowShader;
+    unsigned int terrainMapShader;
 
     unsigned int defaultNormalMap;
 
@@ -78,15 +80,20 @@ private :
     Camera camera;
 
     ModelInfo terrainInfo;
+    glm::mat4 terrainTransform;
+    glm::mat3 terrainNormalMatrix;
+    unsigned int terrainMap;
+    float terrainUnitLength = 5.0f;
+    float terrainHeightScale = 20.0f;
+    float terrainGenNoiseScale = 0.03f;
     int terrainVertsCountX = 25;
     int terrainVertsCountZ = 25;
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
-    int terrainIndicesCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ);
-    float terrainUnitLength = 5.0f;
-    float terrainHeightScale = 13.0f;
-    float terrainGenNoiseScale = 0.03f;
-    glm::mat4 terrainTransform;
-    glm::mat3 terrainNormalMatrix;
+    int terrainIndicesCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
+    int terrainLengthX = (terrainVertsCountX - 1) * terrainUnitLength;
+    int terrainLengthZ = (terrainVertsCountZ - 1) * terrainUnitLength;
+    int terrainMapWidth = 4096;
+    int terrainMapHeight = 4096;
 
     ModelInfo cubeInfo;
     glm::mat4 cubeTransform;
@@ -103,6 +110,7 @@ private :
     float ambience = 0.1f;
 
     unsigned int shadowFBO;
+    unsigned int terrainMapFBO;
 
     unsigned int postFBO;
     unsigned int postFBOColorTexture;
@@ -110,11 +118,11 @@ private :
     unsigned int postShader;
     float gamma = 2.2f;
 
+    void configureVAO();
     void loadModels();
     void loadTextures();
     void createObjects();
     void createLightSources();
-    void configureVAO();
     void configureCamera();
     void configurePostFBO();
     void configureInputs();

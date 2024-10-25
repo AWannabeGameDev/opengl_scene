@@ -27,6 +27,59 @@ struct CameraMatrices
     glm::mat4 proj;
 };
 
+void App::configureVAO()
+{
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+    glGenBuffers(1, &ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+
+    glGenBuffers(1, &instanceVbo);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
+
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+
+    glBindVertexBuffer(VERTEX_DATA_BINDING_POINT, vbo, 0, sizeof(Vertex));
+    glBindVertexBuffer(INSTANCE_DATA_BINDING_POINT, instanceVbo, 0, sizeof(InstanceData));
+    glVertexBindingDivisor(INSTANCE_DATA_BINDING_POINT, 1);
+
+    glVertexAttribFormat(VERTEX_POS_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
+    glVertexAttribBinding(VERTEX_POS_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_POS_ATTRIB_INDEX);
+
+    glVertexAttribFormat(VERTEX_NORMAL_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
+    glVertexAttribBinding(VERTEX_NORMAL_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_NORMAL_ATTRIB_INDEX);
+
+    glVertexAttribFormat(VERTEX_TANGENT_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, tangent));
+    glVertexAttribBinding(VERTEX_TANGENT_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_TANGENT_ATTRIB_INDEX);
+
+    glVertexAttribFormat(VERTEX_TEXCOORD_ATTRIB_INDEX, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, texCoord));
+    glVertexAttribBinding(VERTEX_TEXCOORD_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
+    glEnableVertexAttribArray(VERTEX_TEXCOORD_ATTRIB_INDEX);
+
+    for(int i = 0; i < 4; i++)
+    {
+        glVertexAttribFormat(VERTEX_TRANSFORM_ATTRIB_INDEX + i, 4, GL_FLOAT, GL_FALSE, 
+                             offsetof(InstanceData, modelMatrix) + (i * sizeof(glm::vec4)));
+        glVertexAttribBinding(VERTEX_TRANSFORM_ATTRIB_INDEX + i, INSTANCE_DATA_BINDING_POINT);
+        glEnableVertexAttribArray(VERTEX_TRANSFORM_ATTRIB_INDEX + i);
+    }
+
+    for(int i = 0; i < 3; i++)
+    {
+        glVertexAttribFormat(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i, 3, GL_FLOAT, GL_FALSE, 
+                             offsetof(InstanceData, normalMatrix) + (i * sizeof(glm::vec3)));
+        glVertexAttribBinding(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i, INSTANCE_DATA_BINDING_POINT);
+        glEnableVertexAttribArray(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i);
+    }
+}
+
 void App::loadModels()
 {
     Vertex verts[terrainVertsCount + cube::NUM_VERTS + (3 * xysquare::NUM_VERTS)];
@@ -38,7 +91,7 @@ void App::loadModels()
         {
             int index = x + (z * terrainVertsCountX);
             float height = (db::perlin(x * terrainUnitLength * terrainGenNoiseScale, 
-                                       z * terrainUnitLength * terrainGenNoiseScale) * 0.5f) + 1.0f;
+                                       z * terrainUnitLength * terrainGenNoiseScale) * 0.5f) + 0.5f;
 
             verts[index].position = {x * terrainUnitLength, height * terrainHeightScale, z * terrainUnitLength};
             verts[index].texCoord = glm::vec2{verts[index].position.x, verts[index].position.z} / 20.0f;
@@ -112,7 +165,7 @@ void App::loadModels()
     std::copy(cube::indices, cube::indices + cube::NUM_INDICES, indices + terrainInfo.drawCmd.eboOffset + terrainIndicesCount);
 
     cubeInfo.drawCmd.eboOffset = terrainInfo.drawCmd.eboOffset + terrainInfo.drawCmd.indexCount;
-    cubeInfo.drawCmd.vboOffset = terrainInfo.drawCmd.vboOffset + terrainVertsCountX;
+    cubeInfo.drawCmd.vboOffset = terrainInfo.drawCmd.vboOffset + terrainVertsCount;
     cubeInfo.drawCmd.indexCount = cube::NUM_INDICES;
     cubeInfo.drawCmd.instanceCount = 1;
     cubeInfo.drawCmd.instanceOffset = terrainInfo.drawCmd.instanceOffset + terrainInfo.drawCmd.instanceCount;
@@ -148,11 +201,9 @@ void App::loadModels()
     grassInfo.drawCmd.instanceCount = grassBoardsCount;
     grassInfo.drawCmd.instanceOffset = cubeInfo.drawCmd.instanceOffset + cubeInfo.drawCmd.instanceCount;
 
-    glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 
-    glGenBuffers(1, &ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
@@ -162,6 +213,43 @@ void App::loadModels()
     glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(DrawIndirect), &terrainInfo.drawCmd);
     glBufferSubData(GL_DRAW_INDIRECT_BUFFER, sizeof(DrawIndirect), sizeof(DrawIndirect), &cubeInfo.drawCmd);
     glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 2 * sizeof(DrawIndirect), sizeof(DrawIndirect), &grassInfo.drawCmd);
+
+    TextureParameterSet texParams =
+    {
+        .minFilter = GL_LINEAR,
+        .magFilter = GL_LINEAR,
+        .texWrapS = GL_CLAMP_TO_EDGE,
+        .texWrapT = GL_CLAMP_TO_EDGE,
+        .texWrapR = GL_CLAMP_TO_EDGE
+    };
+
+    terrainMap = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, terrainMapWidth, terrainMapHeight);
+    
+    glActiveTexture(GL_TEXTURE0 + TERRAIN_MAP_TEXTURE_UNIT);
+    glBindTexture(GL_TEXTURE_2D, terrainMap);
+
+    glm::mat4 terrainBoxOrtho{glm::ortho(0.0f, (float)terrainLengthX, 
+                                         0.0f, (float)terrainLengthZ, 
+                                         (float)terrainHeightScale, 0.0f)
+                              * glm::rotate(glm::mat4{1.0f}, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f})};
+
+    glGenFramebuffers(1, &terrainMapFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, terrainMapFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, terrainMap, 0);
+
+    uniforms.addUniform(terrainMapShader, "u_orthoBoxMatrix");
+    
+    glUseProgram(terrainMapShader);
+    uniforms.setUniform(terrainMapShader, "u_orthoBoxMatrix", terrainBoxOrtho);
+
+    glViewport(0, 0, terrainMapWidth, terrainMapHeight);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void App::loadTextures()
@@ -228,7 +316,6 @@ void App::createObjects()
                     * glm::scale(glm::mat4{1.0f}, {4.0f, 4.0f, 4.0f});
     cubeNormalMatrix = glm::mat3{glm::inverse(glm::transpose(cubeTransform))};
 
-    glGenBuffers(1, &instanceVbo);
     glBindBuffer(GL_ARRAY_BUFFER, instanceVbo);
     glBufferData(GL_ARRAY_BUFFER, 2 * sizeof(InstanceData), nullptr, GL_DYNAMIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, offsetof(InstanceData, modelMatrix), sizeof(glm::mat4), glm::value_ptr(terrainTransform));
@@ -298,50 +385,6 @@ void App::createLightSources()
     uniforms.setUniform(objShader, "u_dirLightShadowMap", DIR_SHADOWMAP_TEXTURE_UNIT);
 }
 
-void App::configureVAO()
-{
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-
-    glBindVertexBuffer(VERTEX_DATA_BINDING_POINT, vbo, 0, sizeof(Vertex));
-    glBindVertexBuffer(INSTANCE_DATA_BINDING_POINT, instanceVbo, 0, sizeof(InstanceData));
-    glVertexBindingDivisor(INSTANCE_DATA_BINDING_POINT, 1);
-
-    glVertexAttribFormat(VERTEX_POS_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
-    glVertexAttribBinding(VERTEX_POS_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
-    glEnableVertexAttribArray(VERTEX_POS_ATTRIB_INDEX);
-
-    glVertexAttribFormat(VERTEX_NORMAL_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
-    glVertexAttribBinding(VERTEX_NORMAL_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
-    glEnableVertexAttribArray(VERTEX_NORMAL_ATTRIB_INDEX);
-
-    glVertexAttribFormat(VERTEX_TANGENT_ATTRIB_INDEX, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, tangent));
-    glVertexAttribBinding(VERTEX_TANGENT_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
-    glEnableVertexAttribArray(VERTEX_TANGENT_ATTRIB_INDEX);
-
-    glVertexAttribFormat(VERTEX_TEXCOORD_ATTRIB_INDEX, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, texCoord));
-    glVertexAttribBinding(VERTEX_TEXCOORD_ATTRIB_INDEX, VERTEX_DATA_BINDING_POINT);
-    glEnableVertexAttribArray(VERTEX_TEXCOORD_ATTRIB_INDEX);
-
-    for(int i = 0; i < 4; i++)
-    {
-        glVertexAttribFormat(VERTEX_TRANSFORM_ATTRIB_INDEX + i, 4, GL_FLOAT, GL_FALSE, 
-                             offsetof(InstanceData, modelMatrix) + (i * sizeof(glm::vec4)));
-        glVertexAttribBinding(VERTEX_TRANSFORM_ATTRIB_INDEX + i, INSTANCE_DATA_BINDING_POINT);
-        glEnableVertexAttribArray(VERTEX_TRANSFORM_ATTRIB_INDEX + i);
-    }
-
-    for(int i = 0; i < 3; i++)
-    {
-        glVertexAttribFormat(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i, 3, GL_FLOAT, GL_FALSE, 
-                             offsetof(InstanceData, normalMatrix) + (i * sizeof(glm::vec3)));
-        glVertexAttribBinding(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i, INSTANCE_DATA_BINDING_POINT);
-        glEnableVertexAttribArray(VERTEX_NORMAL_MATRIX_ATTRIB_INDEX + i);
-    }
-}
-
 void App::configureCamera()
 {
     glGenBuffers(1, &cameraUBO);
@@ -361,9 +404,9 @@ void App::configurePostFBO()
     {
         .minFilter = GL_LINEAR,
         .magFilter = GL_LINEAR,
-        .texWrapS = GL_CLAMP_TO_BORDER,
-        .texWrapT = GL_CLAMP_TO_BORDER,
-        .texWrapR = GL_CLAMP_TO_BORDER
+        .texWrapS = GL_CLAMP_TO_EDGE,
+        .texWrapT = GL_CLAMP_TO_EDGE,
+        .texWrapR = GL_CLAMP_TO_EDGE
     };
 
     postFBOColorTexture = createTexture(GL_TEXTURE_2D, texParams, GL_RGB16, screenWidth, screenHeight);
@@ -404,20 +447,18 @@ App::App() :
     normalShader{createShaderProgram("../src/shaders/normal_vs.glsl", "../src/shaders/normal_gs.glsl", 
                                      "../src/shaders/normal_fs.glsl")},
     dirShadowShader{createShaderProgram("../src/shaders/dir_shadowmap_vs.glsl", "../src/shaders/dir_shadowmap_fs.glsl")},
-    postShader{createShaderProgram("../src/shaders/post_vs.glsl", "../src/shaders/post_fs.glsl")}
+    postShader{createShaderProgram("../src/shaders/post_vs.glsl", "../src/shaders/post_fs.glsl")},
+    terrainMapShader{createShaderProgram("../src/shaders/terrain_map_vs.glsl", "../src/shaders/terrain_map_fs.glsl")}
 {
     glDebugMessageCallback(glDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    glEnable(GL_DEPTH_TEST);
-    glViewport(0, 0, screenWidth, screenHeight);
-
+    configureVAO();
     loadModels();
     loadTextures();
     createObjects();
     createLightSources();
-    configureVAO();
     configureCamera();
     configurePostFBO();
     configureInputs();
@@ -489,6 +530,7 @@ void App::run()
         */
 
         //----------------------------------------------------------------------------------------
+
         glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
         glViewport(0, 0, shadowMapWidth, shadowMapHeight);
         glEnable(GL_DEPTH_TEST);
