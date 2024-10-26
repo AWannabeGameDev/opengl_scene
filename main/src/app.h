@@ -86,8 +86,8 @@ private :
     float terrainUnitLength = 5.0f;
     float terrainHeightScale = 20.0f;
     float terrainGenNoiseScale = 0.03f;
-    int terrainVertsCountX = 25;
-    int terrainVertsCountZ = 25;
+    int terrainVertsCountX = 50;
+    int terrainVertsCountZ = 50;
     int terrainVertsCount = terrainVertsCountX * terrainVertsCountZ;
     int terrainIndicesCount = 6 * (terrainVertsCountX - 1) * (terrainVertsCountZ - 1);
     int terrainLengthX = (terrainVertsCountX - 1) * terrainUnitLength;

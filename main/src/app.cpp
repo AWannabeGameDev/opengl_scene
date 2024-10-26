@@ -82,8 +82,10 @@ void App::configureVAO()
 
 void App::loadModels()
 {
-    Vertex verts[terrainVertsCount + cube::NUM_VERTS + (3 * xysquare::NUM_VERTS)];
-    unsigned int indices[terrainIndicesCount + cube::NUM_INDICES + (3 * xysquare::NUM_INDICES)];
+    size_t vertsByteSize = (terrainVertsCount + cube::NUM_VERTS + (3 * xysquare::NUM_VERTS)) * sizeof(Vertex);
+    size_t indicesByteSize = (terrainIndicesCount + cube::NUM_INDICES + (3 * xysquare::NUM_INDICES)) * sizeof(unsigned int);
+    Vertex* verts = (Vertex*)::operator new(vertsByteSize);
+    unsigned int* indices = (unsigned int*)::operator new(indicesByteSize);
 
     for(int z = 0; z < terrainVertsCountZ; z++)
     {
@@ -202,10 +204,12 @@ void App::loadModels()
     grassInfo.drawCmd.instanceOffset = cubeInfo.drawCmd.instanceOffset + cubeInfo.drawCmd.instanceCount;
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertsByteSize, verts, GL_STATIC_DRAW);
+    ::operator delete(verts);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indicesByteSize, indices, GL_STATIC_DRAW);
+    ::operator delete(indices);
 
     glGenBuffers(1, &dibo);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dibo);
@@ -345,7 +349,7 @@ void App::createLightSources()
         terrainVertsCountX * terrainUnitLength / 2.0f, 0.0f,
         terrainVertsCountZ * terrainUnitLength / 2.0f  
     };
-    dirLightMatrix = glm::ortho(-terrainVertsCountX * terrainUnitLength / 1.3f, terrainVertsCountX * terrainUnitLength / 1.3f,
+    dirLightMatrix = glm::ortho(-terrainLengthX / 1.3f, terrainLengthZ / 1.3f,
                                 -terrainHeightScale * 1.5f, terrainHeightScale * 3.0f, 
                                 -terrainVertsCountZ * terrainUnitLength, terrainVertsCountZ * terrainUnitLength)
                      * glm::lookAt(dirLightPosition, dirLightPosition + dirLight.direction, {0.0f, 1.0f, 0.0f});
@@ -450,7 +454,7 @@ App::App() :
     postShader{createShaderProgram("../src/shaders/post_vs.glsl", "../src/shaders/post_fs.glsl")},
     terrainMapShader{createShaderProgram("../src/shaders/terrain_map_vs.glsl", "../src/shaders/terrain_map_fs.glsl")}
 {
-    glDebugMessageCallback(glDebugCallback, nullptr);
+    glDebugMessageCallback(openglDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
