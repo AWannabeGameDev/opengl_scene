@@ -350,7 +350,7 @@ void App::createLightSources()
         terrainVertsCountZ * terrainUnitLength / 2.0f  
     };
     dirLightMatrix = glm::ortho(-terrainLengthX / 1.3f, terrainLengthZ / 1.3f,
-                                -terrainHeightScale * 1.5f, terrainHeightScale * 3.0f, 
+                                -terrainHeightScale * 2.0f, terrainHeightScale * 4.0f, 
                                 -terrainVertsCountZ * terrainUnitLength, terrainVertsCountZ * terrainUnitLength)
                      * glm::lookAt(dirLightPosition, dirLightPosition + dirLight.direction, {0.0f, 1.0f, 0.0f});
 
@@ -447,12 +447,12 @@ App::App() :
     window{initialize(screenWidth, screenHeight, "OpenGL Scene", 4, 6)},
     keys{window}, mouse{window},
     camera{glm::radians(45.0f), (float)screenWidth / (float)screenHeight, 0.1f, 1000.0f},
-    objShader{createShaderProgram("../src/shaders/obj_vs.glsl", "../src/shaders/obj_fs.glsl")},
-    normalShader{createShaderProgram("../src/shaders/normal_vs.glsl", "../src/shaders/normal_gs.glsl", 
-                                     "../src/shaders/normal_fs.glsl")},
-    dirShadowShader{createShaderProgram("../src/shaders/dir_shadowmap_vs.glsl", "../src/shaders/dir_shadowmap_fs.glsl")},
-    postShader{createShaderProgram("../src/shaders/post_vs.glsl", "../src/shaders/post_fs.glsl")},
-    terrainMapShader{createShaderProgram("../src/shaders/terrain_map_vs.glsl", "../src/shaders/terrain_map_fs.glsl")}
+    objShader{createShaderProgram({"../src/shaders/obj.vxs", "../src/shaders/obj.fms"})},
+    normalShader{createShaderProgram({"../src/shaders/normal.vxs", "../src/shaders/normal.gms", 
+                                     "../src/shaders/normal.fms"})},
+    dirShadowShader{createShaderProgram({"../src/shaders/dir_shadowmap.vxs", "../src/shaders/dir_shadowmap.fms"})},
+    postShader{createShaderProgram({"../src/shaders/post.vxs", "../src/shaders/post.fms"})},
+    terrainMapShader{createShaderProgram({"../src/shaders/terrain_map.vxs", "../src/shaders/terrain_map.fms"})}
 {
     glDebugMessageCallback(openglDebugCallback, nullptr);
     glEnable(GL_DEBUG_OUTPUT);
